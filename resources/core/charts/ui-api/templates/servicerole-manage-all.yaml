@@ -13,3 +13,7 @@ spec:
   - services: [ '{{ template "fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local' ]
     paths: ["/graphql"]
     methods: ["*"]
+    constraints:
+    - key: request.headers[kyma-graphql-resources]
+      values:
+      - '{remoteEnvironments}'

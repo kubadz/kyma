@@ -8,7 +8,7 @@ function envoy_on_response(response_handle)
 end
 
 function GraphQlAuthPlugin_OnRequest(request_handle)
-
+    request_handle:logInfo("Hello World")
     -- it does not work - i'm not able to read host header
     -- local authority = request_handle:headers():get(":authority")
     -- if (authority == "core-ui-api.kyma-system.svc.cluster.local") then
@@ -21,6 +21,7 @@ function GraphQlAuthPlugin_OnRequest(request_handle)
         local queryItems = parseGraphQlQuery(query)
         if (queryItems.resources ~= "") then
             request_handle:headers():replace("kyma-graphql-resources", queryItems.resources)
+            print("Request on path: ", path, ". Set header kyma-graphql-resources to ", queryItems.resources, ".")
         end
     end
 end

@@ -1,0 +1,79 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: sample
+  labels:
+    app: sample
+  namespace: kyma-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: sample
+      annotations: 
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+      - name: app
+        image: kubagoryl/print-headers:1
+        ports:
+        - name: http
+          containerPort: 3000
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name:  sample
+  namespace: kyma-system
+spec:
+  selector:
+    app:  sample
+  ports:
+  - name:  http
+    port:  80
+    targetPort: 3000
+---
+apiVersion: gateway.kyma.cx/v1alpha2
+kind: Api
+metadata:
+    name: sample-api
+    namespace: kyma-system
+spec:
+    service:
+      name: sample
+      port: 80
+    hostname: print-headers.kyma.local
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: sample-lua
+  namespace: kyma-system
+spec:
+  workloadLabels:
+    app: sample
+  filters:
+  - filterName: envoy.lua
+    filterType: HTTP
+    filterConfig:
+      inlineCode: |
+        function envoy_on_request(request_handle)
+            request_handle:logInfo("Hello from sample headers")
+            GraphQlAuthPlugin_OnRequest(request_handle)
+        end
+
+        -- Called on the response path.
+        --function envoy_on_response(response_handle)
+        --end
+
+        function GraphQlAuthPlugin_OnRequest(request_handle)
+
+            local path = request_handle:headers():get(":path")
+            if (path ~= nil) and (path == "/graphql") then
+
+                request_handle:headers():replace("x-sample-token", "sample")
+                print("Got request on path ", path, ". Set x-sample-token header.")
+
+            end
+        end
