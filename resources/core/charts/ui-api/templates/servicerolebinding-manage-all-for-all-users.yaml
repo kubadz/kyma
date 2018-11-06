@@ -11,6 +11,8 @@ metadata:
 spec:
   subjects:
   - user: "*"
+    properties:
+      request.auth.claims[email]: nobody@kyma.cx
   roleRef:
     kind: ServiceRole
     name: "graphql-manage-all"

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name:  nobody-user
+  namespace: kyma-system
+  labels:
+    "dex-user-config": "true"
+data:
+  email: bm9ib2R5QGt5bWEuY3g= # nobody@kyma.cx
+  username: bm9ib2R5 # nobody
+  password: bmltZGExMjM= # nimda123
+  
+type: Opaque
