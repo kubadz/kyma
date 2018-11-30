@@ -11,19 +11,19 @@ function GraphQlAuthPlugin_OnRequest(request_handle)
   local path = request_handle:headers():get(":path")
   if (path ~= nil) and (path == "/graphql") then
 
-    local method = request_handle:headers():get(":method")
-    if (method ~= nil) and (method == "POST") then
-      request_handle:headers():replace("kyma-graphql-parsed", "true")
+    --local method = request_handle:headers():get(":method")
+    --if (method ~= nil) and (method == "POST") then
+    request_handle:headers():replace("kyma-graphql-parsed", "true")
 
-      local body = request_handle:body()
-      if (body ~= nil) then
-        local query = request_handle:body():getBytes(0, request_handle:body():length())
-        local queryItems = parseGraphQlQuery(query)
-        if (queryItems.resources ~= "") then
-          request_handle:headers():replace("kyma-graphql-resources", queryItems.resources)
-        end
+    local body = request_handle:body()
+    if (body ~= nil) then
+      local query = request_handle:body():getBytes(0, request_handle:body():length())
+      local queryItems = parseGraphQlQuery(query)
+      if (queryItems.resources ~= "") then
+        request_handle:headers():replace("kyma-graphql-resources", queryItems.resources)
       end
     end
+    --end
   end
 end
 
