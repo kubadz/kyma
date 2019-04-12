@@ -10,10 +10,10 @@ import (
 	arkbackuppkg "github.com/heptio/ark/pkg/backup"
 	backup "github.com/heptio/ark/pkg/generated/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
-	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/ghodss/yaml"
 	"github.com/heptio/ark/pkg/cmd/util/output"
@@ -80,8 +80,11 @@ func (c *backupClient) CreateBackup(backupName, specPath string) error {
 		},
 		Spec: backupSpec,
 	}
-	_, err = c.backupClient.ArkV1().Backups("heptio-ark").Create(backup)
-	return err
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := c.backupClient.ArkV1().Backups("heptio-ark").Create(backup)
+		return err
+	})
 }
 
 func (c *backupClient) WaitForBackupToBeCreated(backupName string, waitmax time.Duration) error {
@@ -95,7 +98,8 @@ func (c *backupClient) WaitForBackupToBeCreated(backupName string, waitmax time.
 		case <-tick:
 			backup, err := c.backupClient.ArkV1().Backups("heptio-ark").Get(backupName, metav1.GetOptions{})
 			if err != nil {
-				return err
+				fmt.Printf("Retrying: error while connecting to API server: %v\n", err.Error())
+				break
 			}
 			if backup.Status.Phase == backupv1.BackupPhaseCompleted {
 				return nil
@@ -208,30 +212,33 @@ func (c *backupClient) CreateNamespace(name string) error {
 	return err
 }
 
-func (c *backupClient) DeleteNamespace(name string) error {
-	return c.coreClient.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{})
-}
-
-func (c *backupClient) WaitForNamespaceToBeDeleted(name string, waitmax time.Duration) error {
-	mywatch, err := c.coreClient.CoreV1().Namespaces().Watch(metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(api.ObjectNameField, name).String(),
+func (c *backupClient) DeleteNamespace(name string, waitmax time.Duration) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := c.coreClient.CoreV1().Namespaces().Delete(name, &metav1.DeleteOptions{})
+		return err
 	})
 	if err != nil {
 		return err
 	}
 
 	timeout := time.After(waitmax)
-
+	tick := time.Tick(2 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("Namespace not deleted within given time  %v", waitmax)
-		case event := <-mywatch.ResultChan():
-			if event.Type == "ERROR" {
-				return fmt.Errorf("Could not delete namespace")
+			ns, err := c.coreClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+			if err != nil {
+				return err
 			}
-			if event.Type == "DELETED" {
-				return nil
+			return fmt.Errorf("namespace could not be deleted, within given time  %v: %+v", waitmax, ns)
+		case <-tick:
+			ns, err := c.coreClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+			if err != nil {
+				if errors.ReasonForError(err) == metav1.StatusReasonNotFound {
+					return nil
+				}
+				log.Printf("Retrying: error while connecting to API server: %v\n", err)
+				break
 			}
 		}
 	}

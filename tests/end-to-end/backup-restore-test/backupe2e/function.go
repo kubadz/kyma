@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	kubelessV1 "github.com/kubeless/kubeless/pkg/apis/kubeless/v1beta1"
+	kubeless "github.com/kubeless/kubeless/pkg/client/clientset/versioned"
+	"github.com/kyma-project/kyma/tests/end-to-end/backup-restore-test/utils/config"
 	. "github.com/smartystreets/goconvey/convey"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	kubelessV1 "github.com/kubeless/kubeless/pkg/apis/kubeless/v1beta1"
-	kubeless "github.com/kubeless/kubeless/pkg/client/clientset/versioned"
-	"github.com/kyma-project/kyma/tests/end-to-end/backup-restore-test/utils/config"
+	"k8s.io/client-go/util/retry"
 )
 
 type functionTest struct {
@@ -49,7 +50,7 @@ func NewFunctionTest() (functionTest, error) {
 }
 
 func (f functionTest) CreateResources(namespace string) {
-	_, err := f.createFunction(namespace)
+	err := f.createFunction(namespace)
 	So(err, ShouldBeNil)
 }
 
@@ -96,7 +97,7 @@ func (f *functionTest) getFunctionOutput(host string, waitmax time.Duration) (st
 
 }
 
-func (f functionTest) createFunction(namespace string) (*kubelessV1.Function, error) {
+func (f functionTest) createFunction(namespace string) error {
 	function := &kubelessV1.Function{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: f.functionName,
@@ -111,7 +112,11 @@ func (f functionTest) createFunction(namespace string) (*kubelessV1.Function, er
 			  }`,
 		},
 	}
-	return f.kubelessClient.KubelessV1beta1().Functions(namespace).Create(function)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := f.kubelessClient.KubelessV1beta1().Functions(namespace).Create(function)
+		return err
+	})
 }
 
 func (f functionTest) getFunctionPodStatus(namespace string, waitmax time.Duration) error {
@@ -128,7 +133,8 @@ func (f functionTest) getFunctionPodStatus(namespace string, waitmax time.Durati
 		case <-tick:
 			pods, err := f.coreClient.CoreV1().Pods(namespace).List(metav1.ListOptions{LabelSelector: "function=" + f.functionName})
 			if err != nil {
-				return err
+				log.Printf("Retrying: error while connecting to API server: %v\n", err)
+				break
 			}
 			if len(pods.Items) == 0 {
 				break
