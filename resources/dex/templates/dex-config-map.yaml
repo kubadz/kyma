@@ -53,6 +53,11 @@ data:
       - 'http://jaeger.{{ .Values.global.ingress.domainName }}:3000/oauth/callback'
       - 'https://jaeger.{{ .Values.global.ingress.domainName }}/oauth/callback'
       secret: oiEWUWOIEwedfgg
+    - id: hydra-consent-app
+      secret: example-app-secret
+      name: 'Hydra consent app'
+      redirectURIs:
+      - 'https://sample-oauth2-dex-login-consent.{{ .Values.global.ingress.domainName }}/callback'
 
     enablePasswordDB: true
     #__STATIC_PASSWORDS__
